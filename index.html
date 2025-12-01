@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCROLL TO THE CORE: ULTIMATE EDITION</title>
+    <style>
+        /* CORE TECHNICAL CONSTRAINTS */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            overflow-x: hidden;
+            position: relative;
+            max-width: 100%; /* Prevent any horizontal overflow issues */
+            background-color: #000;
+        }
+
+        /* The total scrollable height of the journey */
+        #tunnel {
+            position: relative;
+            width: 100%;
+            height: 100000px; /* This creates the deep scrollbar */
+            z-index: 0; /* Creates a stacking context to ensure it's above negative z-index siblings */
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        /* A fixed container for non-scrolling background elements */
+        #viewport-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Fixed background layer that will change colors */
+        #world-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: -2; /* Bottom-most layer */
+            transition: background-color 500ms ease;
+        }
+
+        /* Container for all the floating emoji particles */
+        #particles-container {
+            position: absolute; /* Now relative to viewport-container */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%; /* It's fixed, we'll move it with JS */
+            z-index: 0; /* In front of world-bg */
+            pointer-events: none; /* Make sure it doesn't interfere with anything */
+        }
+        
+        .particle {
+            position: absolute;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        /* The central "Tether" line */
+        #tunnel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 2px;
+            height: 100%;
+            background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 50%, transparent 50%);
+            background-size: 1px 10px;
+            transform: translateX(-50%);
+        }
+        
+        /* The "Depth Probe" UI */
+        #depth-probe {
+            position: fixed;
+            top: 50%;
+            left: 50%; /* Centering */
+            transform: translate(-50%, -50%); /* Centering */
+            z-index: 1100; /* Above content, below end-message */
+            padding: 10px 40px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 2px solid #00FF00;
+            border-radius: 50px;
+            color: #00FF00;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            /* Dynamic sizing: expand to content, but don't overflow screen */
+            width: max-content;
+            max-width: 90vw;
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s ease-in-out; /* Combine all transitions */
+            /* Performance hints for the browser to prevent wobbling/jittering */
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+            pointer-events: none; /* UI element should not be clickable */
+        }
+        
+        #depth-probe.pulsing {
+            box-shadow: 0 0 20px 5px #00FF00;
+        }
+
+        #depth-probe::before,
+        #depth-probe::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            transform: translateY(-50%);
+        }
+        
+        #depth-probe::before {
+            left: 15px;
+            border-width: 8px 8px 8px 0;
+            border-color: transparent #00FF00 transparent transparent;
+        }
+
+        #depth-probe::after {
+            right: 15px;
+            border-width: 8px 0 8px 8px;
+            border-color: transparent transparent transparent #00FF00;
+        }
+
+        .marker {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 100px;
+            filter: drop-shadow(0 0 20px rgba(255,255,255,0.5));
+            transition: transform 0.3s ease-out;
+            user-select: none;
+            -webkit-user-select: none;
+            text-align: center;
+        }
+
+        .marker.active {
+            transform: translateX(-50%) scale(1.5);
+            filter: drop-shadow(0 0 30px #fff);
+        }
+
+        .marker-label {
+            position: absolute;
+            top: 100%; /* Position label reliably below the marker emoji */
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 10px; /* Add some space between emoji and label */
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 16px;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            width: max-content; /* Prevent label from being too wide on desktop */
+            white-space: nowrap;
+        }
+
+        .marker-name {
+            display: block;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .marker-description {
+            display: block;
+            font-size: 14px;
+            color: #ccc;
+            margin-top: 4px;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+
+        #tunnel.shake-active {
+            animation: shake 0.5s;
+        }
+
+        #end-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000; /* Highest layer */
+            color: black;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        #end-message h1 {
+            font-size: 48px;
+            text-shadow: 0 0 15px black;
+        }
+
+        #end-message p {
+            font-size: 20px;
+            margin-top: 10px;
+            color: #666; /* Darker gray for readability on white background */
+            text-shadow: 0 0 10px #666;
+        }
+
+        #end-message a {
+            color: teal; /* Use the UI's highlight color for visibility */
+            text-decoration: underline; /* Always show underline */
+            pointer-events: auto; /* Make the link clickable */
+            text-shadow: 0 0 8px teal; /* Add a subtle glow */
+        }
+
+        #end-message a:hover {
+            /* Optional: slightly brighter on hover */
+            filter: brightness(1.2);
+        }
+
+        /* --- MOBILE RESPONSIVENESS --- */
+        @media (max-width: 600px) {
+            #depth-probe {
+                padding: 8px 25px;
+                font-size: 16px;
+                /* Re-affirm centering for mobile as width becomes dynamic */
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+
+            .marker-label {
+                width: auto; /* Let it be flexible */
+                max-width: 90vw; /* But not wider than the screen */
+                white-space: normal; /* Allow text to wrap */
+                text-align: center;
+                font-size: 14px;
+            }
+
+            .marker-name { font-size: 16px; }
+            .marker-description { font-size: 12px; }
+
+            #end-message h1 {
+                font-size: 36px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div id="viewport-container">
+        <div id="world-bg"></div>
+        <div id="particles-container"></div>
+    </div>
+    <main id="tunnel"></main>
+    <div id="depth-probe">
+        <span id="depth-text">0 m</span>
+    </div>
+    <div id="end-message">
+        <h1>Thanks for playing</h1>
+        <p>Doomscroll by <a href="https://github.com/hoangnamdev" target="_blank">@hnamdev</a></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tunnel = document.getElementById('tunnel');
+            const worldBg = document.getElementById('world-bg');
+            const particlesContainer = document.getElementById('particles-container');
+            const depthProbe = document.getElementById('depth-probe');
+            const depthText = document.getElementById('depth-text');
+            const endMessage = document.getElementById('end-message');
+
+            const SCROLL_HEIGHT = 100000;
+            const VIRTUAL_DEPTH = 6371000; // Earth's radius in meters
+            const VIEWPORT_HEIGHT = window.innerHeight;
+            
+            // --- DATA ARRAYS ---
+            const MARKERS = [
+                // The Shallow Zone (0m – 100m)
+                { depth: 0, emoji: '🌳', name: 'Surface Level', description: 'Touch grass while you still can.' },
+                { depth: 1.8, emoji: '⚰️', name: 'Standard Grave', description: 'Six feet under. Cozy.' },
+                { depth: 4, emoji: '🐊', name: 'Nile Crocodile Burrow', description: 'They dig tunnels to escape the heat. Clever dinos.' },
+                { depth: 6, emoji: '🦒', name: 'Giraffe Height', description: 'Buried standing up. Why would you do that?' },
+                { depth: 12, emoji: '🎍', name: 'Deepest Roots', description: 'Wild Fig trees can reach this deep looking for water.' },
+                { depth: 20, emoji: '💀', name: 'Paris Catacombs', description: '6 million skeletons are judging your scrolling speed.' },
+                { depth: 33, emoji: '🧱', name: 'Great Wall of China', description: 'If you buried it vertically. It\'s not that deep.' },
+                { depth: 40, emoji: '🏊', name: 'Deepest Scuba Dive', description: 'World Record. Your lungs would look like raisins here.' },
+                { depth: 60, emoji: '🤽', name: 'Deep Dive Dubai', description: 'Deepest swimming pool. Contains a sunken city.' },
+                // The Urban Underground (100m – 1,000m)
+                { depth: 105, emoji: '🚇', name: 'Arsenalna Station', description: 'Deepest metro station (Kyiv). 5 minute escalator ride.' },
+                { depth: 155, emoji: '🏨', name: 'Sala Silver Mine', description: 'You can rent a hotel room here. No windows, obviously.' },
+                { depth: 220, emoji: '🐟', name: 'Congo River', description: 'The deepest river in the world. Light does not reach the bottom.' },
+                { depth: 300, emoji: '🗼', name: 'Eiffel Tower (Inverted)', description: 'Imagine the view, but dirt.' },
+                { depth: 392, emoji: '🧗', name: 'Woodingdean Well', description: 'Deepest hand-dug hole. Dug by guys with shovels in 1862.' },
+                { depth: 600, emoji: '☢️', name: 'Nuclear Waste Storage', description: 'Onkalo, Finland. Safe for 100,000 years. Hopefully.' },
+                { depth: 700, emoji: '👷', name: 'Chilean Miners', description: 'Where 33 miners were trapped for 69 days in 2010.' },
+                { depth: 828, emoji: '🏢', name: 'Burj Khalifa (Inverted)', description: 'We just passed the world\'s tallest building.' },
+                // The Deep Crust (1,000m – 12,000m)
+                { depth: 1270, emoji: '🎸', name: 'Concert in a Mine', description: 'Deepest underground concert (Agnew, Canada). The acoustics rocked.' },
+                { depth: 1642, emoji: '🚤', name: 'Lake Baikal', description: 'Deepest lake. Holds 20% of Earth\'s unfrozen fresh water.' },
+                { depth: 2197, emoji: '🐌', name: 'Krubera Cave', description: 'The \'Everest of Caves\'. It takes weeks to descend.' },
+                { depth: 2400, emoji: '👻', name: 'Jinping Lab', description: 'Deepest physics lab. Hunting for Dark Matter in silence.' },
+                { depth: 3800, emoji: '🚢', name: 'Titanic Wreck', description: 'Jack still wouldn\'t fit on the door down here.' },
+                { depth: 4000, emoji: '⛏️', name: 'Mponeng Gold Mine', description: 'Deepest mine. Rock temp is 60°C. They pump ice slurry down.' },
+                { depth: 8848, emoji: '🏔️', name: 'Mt. Everest (Inverted)', description: 'If you stuffed the mountain into the ocean, this is the tip.' },
+                { depth: 10994, emoji: '🦑', name: 'Challenger Deep', description: 'Bottom of Mariana Trench. Pressure: 1,000x surface.' },
+                { depth: 12262, emoji: '🕳️', name: 'Kola Borehole', description: 'Soviet Russia drilled this. Stopped because rocks melted into goo.' },
+                // The Mantle & Beyond (35km+)
+                { depth: 35000, emoji: '💎', name: 'Diamonds Form Here', description: 'Carbon gets crushed into bling.' },
+                { depth: 100000, emoji: '🌫️', name: 'Karman Line (Equivalent)', description: 'Edge of space (if you looked up). We are this far down now.' },
+                { depth: 410000, emoji: '🔄', name: 'Transition Zone', description: 'Minerals change crystal structure here. It gets messy.' },
+                { depth: 700000, emoji: '🌋', name: 'Lower Mantle', description: '70% of Earth\'s volume. Slowly churning like thick soup.' },
+                { depth: 2890000, emoji: '📉', name: 'The D\'\' Layer', description: 'The Gutenberg Discontinuity. Boundary between stone and metal.' },
+                { depth: 2900000, emoji: '🌊', name: 'Outer Core', description: 'Liquid iron ocean. Magnetic fields generated here.' },
+                { depth: 5150000, emoji: '☀️', name: 'Inner Core', description: 'Solid iron ball. Hotter than the surface of the Sun.' },
+                { depth: 6371000, emoji: '🛑', name: 'Center of Earth', description: 'You made it. Now scroll back up.' }
+            ];
+
+            const COLOR_STOPS = [
+                { depth: 0, color: '#87CEEB' },       // Surface: Sky Blue
+                { depth: 20, color: '#D2B48C' },      // Shallow Earth (Catacombs): Tan
+                { depth: 220, color: '#696969' },     // Deeper Underground (Congo River): Dim Gray
+                { depth: 1642, color: '#191970' },    // Deep Water (Lake Baikal): Midnight Blue
+                { depth: 10994, color: '#0d0d1f' },   // The Trench (Challenger Deep): Near Black
+                { depth: 35000, color: '#5E1D1D' },   // Upper Mantle (Diamonds): Dark Red
+                { depth: 2900000, color: '#FF4500' }, // Outer Core: Orange-Red
+                { depth: 5150000, color: '#FFFACD' }, // Inner Core: Lemon Chiffon (White-Hot)
+                { depth: 6371000, color: '#FFFFFF' }  // Center: Pure White
+            ];
+
+            const PARTICLE_ZONES = [
+                // Granular zones for better thematic representation
+                { start: 0,       end: 12,      emojis: ['🌳', '🍃', '🪨', '🐊', '🎍', '🪱'] }, // Surface Life: Plants, animals, soil
+                { start: 12,      end: 105,     emojis: ['💀', '🦴', '🧱', '💧', '🪨'] }, // Shallow Structures: Bones, water, simple structures
+                { start: 105,     end: 828,     emojis: ['🐟', '🧱', '🪨', '💧'] }, // Urban Underground: More rock, water, minerals
+                { start: 828,     end: 3800,    emojis: ['🐌', '👻', '🦇', '🪨', '💧'] }, // Deep Crust & Caves: Cave life, minerals
+                { start: 3800,    end: 12262,   emojis: ['🏔️', '🦑', '🕳️', '💧', '🔥', '🌋'] }, // The Abyss: Pressure, deep sea life, geothermal
+                // Upper Mantle Split for Diamond Zone
+                { start: 12262,   end: 34000,   emojis: ['🪨', '🔥', '💥'], effects: { pulse: true } }, // Pre-Diamond: Rock, heat, pressure
+                { start: 34000,   end: 36000,   emojis: ['💎', '💍', '💎', '💎', '✨'], effects: { pulse: true } }, // DIAMOND ZONE
+                { start: 36000,   end: 100000,  emojis: ['🪨', '🔥', '💥', '💎'], effects: { pulse: true } }, // Post-Diamond: Diamonds become rarer
+                { start: 100000,  end: 700000,  emojis: ['🔄', '🌫️', '✨', '🪨'], effects: { pulse: true } }, // Transition Zone
+                { start: 700000,  end: 2900000, emojis: ['🌋', '🔥', '💥', '☄️', '🪨'], effects: { pulse: true } }, // Lower Mantle: Magma, rock
+                { start: 2900000, end: 5150000, emojis: ['🌊', '⚡', '🌪️', '🔥', '💥'], effects: { spin: true } }, // Outer Core: Liquid metal, magnetic fields
+                { start: 5150000, end: 6371000, emojis: ['☀️', '⚛️', '💥', '💫', '🌟'], effects: { spin: true } } // Inner Core: Pure energy, stellar heat
+            ];
+            
+            // --- HYBRID SCALING FUNCTIONS ---
+            const SCALING_CONFIG = [
+                { endDepth: 1000,      power: 0.2, scrollPortion: 0.30 }, // Zone 1: Surface (Very Slow)
+                { endDepth: 35000,     power: 0.5, scrollPortion: 0.30 }, // Zone 2: Crust (Medium)
+                { endDepth: 2700000,   power: 0.8, scrollPortion: 0.25 }, // Zone 3: Main Mantle (Fast-ish)
+                { endDepth: 2900000,   power: 1.0, scrollPortion: 0.05 }, // Zone 4: Gutenberg Discontinuity (Slow down)
+                { endDepth: VIRTUAL_DEPTH, power: 1.5, scrollPortion: 0.10 }  // Zone 5: Core (Fast end)
+            ];
+
+            function getScrollTopForDepth(depth) {
+                if (depth <= 0) return 0;
+                if (depth >= VIRTUAL_DEPTH) return SCROLL_HEIGHT;
+
+                let accumulatedScroll = 0;
+                let lastDepth = 0;
+
+                for (const zone of SCALING_CONFIG) {
+                    if (depth <= zone.endDepth) {
+                        const depthIntoZone = depth - lastDepth;
+                        const normalizedDepthInZone = depthIntoZone / (zone.endDepth - lastDepth);
+                        const scrollInZone = Math.pow(normalizedDepthInZone, zone.power) * (zone.scrollPortion * SCROLL_HEIGHT);
+                        return accumulatedScroll + scrollInZone;
+                    }
+                    accumulatedScroll += zone.scrollPortion * SCROLL_HEIGHT;
+                    lastDepth = zone.endDepth;
+                }
+                return SCROLL_HEIGHT;
+            }
+
+           function getDepthForScrollTop(scrollY) {
+               if (scrollY <= 0) return 0;
+               if (scrollY >= SCROLL_HEIGHT) return VIRTUAL_DEPTH;
+
+               let accumulatedScroll = 0;
+               let lastDepth = 0;
+
+               for (const zone of SCALING_CONFIG) {
+                   const zoneScrollHeight = zone.scrollPortion * SCROLL_HEIGHT;
+                   if (scrollY <= accumulatedScroll + zoneScrollHeight) {
+                       const scrollIntoZone = scrollY - accumulatedScroll;
+                       const normalizedScrollInZone = scrollIntoZone / zoneScrollHeight;
+                       const depthInZone = Math.pow(normalizedScrollInZone, 1 / zone.power) * (zone.endDepth - lastDepth);
+                       return lastDepth + depthInZone;
+                   }
+                   accumulatedScroll += zoneScrollHeight;
+                   lastDepth = zone.endDepth;
+               }
+               return VIRTUAL_DEPTH;
+           }
+
+            // --- INITIALIZATION ---
+            function setup() {
+                generateParticles();
+                generateMarkers();
+                update();
+            }
+
+            function generateParticles() {
+                // Reduce particle count on smaller screens for better performance
+                const isMobile = window.innerWidth <= 600;
+                const totalParticles = isMobile ? 300 : 600;
+
+                for (let i = 0; i < totalParticles; i++) {
+                    const particle = document.createElement('div');
+                    particle.classList.add('particle');
+                    
+                    // Distribute particles across a height larger than the viewport
+                    const particleScrollY = Math.random() * SCROLL_HEIGHT;
+                    const particleDepth = getDepthForScrollTop(particleScrollY);
+
+                    const zone = PARTICLE_ZONES.find(z => particleDepth >= z.start && particleDepth <= z.end) || PARTICLE_ZONES[0];
+                    particle.innerHTML = zone.emojis[Math.floor(Math.random() * zone.emojis.length)];                    
+                    particle.style.top = `${particleScrollY}px`;
+                    particle.style.left = `${-20 + Math.random() * 140}%`;
+                    particle.style.fontSize = `${20 + Math.random() * 100}px`;
+                    particle.style.opacity = (0.1 + Math.random() * 0.3).toFixed(2);
+                    particle.style.filter = `blur(${Math.random() * 4}px)`;
+                    if (zone.effects?.pulse) particle.style.animation = `pulse ${2 + Math.random() * 2}s infinite`;
+                    if (zone.effects?.spin) particle.style.animation = `spin ${5 + Math.random() * 10}s linear infinite`;
+                    if (zone.effects?.glow) particle.style.filter += ` drop-shadow(0 0 15px rgba(0, 150, 255, 0.7))`;
+                    particlesContainer.appendChild(particle);
+                }
+            }
+
+            function generateMarkers() {
+                MARKERS.forEach(markerData => {
+                    const marker = document.createElement('div');
+                    marker.classList.add('marker');
+                    marker.innerHTML = markerData.emoji;
+                    const topPosition = getScrollTopForDepth(markerData.depth);
+                    marker.style.top = `${topPosition}px`;
+                    marker.dataset.depth = markerData.depth;
+                    const label = document.createElement('div');
+                    label.classList.add('marker-label');
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.classList.add('marker-name');
+                    nameSpan.textContent = `${markerData.name} (${markerData.depth.toLocaleString()} m)`;
+                    label.appendChild(nameSpan);
+
+                    const descSpan = document.createElement('span');
+                    descSpan.classList.add('marker-description');
+                    descSpan.textContent = markerData.description;
+                    label.appendChild(descSpan);
+
+                    if (markerData.depth === VIRTUAL_DEPTH) {
+                        marker.id = 'center-of-earth-marker';
+                    }
+
+                    marker.appendChild(label);
+                    tunnel.appendChild(marker);
+                });
+            }
+
+            let hasShakenAtBottom = false;
+
+            // --- CORE UPDATE LOOP ---
+            function update() {
+                const scrollY = window.scrollY;
+                const probeLine = scrollY + VIEWPORT_HEIGHT / 2;
+                const maxScrollY = SCROLL_HEIGHT; // The total scrollable range is the tunnel height
+                const scrollPercent = Math.max(0, Math.min(1, probeLine / maxScrollY));
+                const normalizedScrollYForDepthCalc = scrollPercent * SCROLL_HEIGHT;
+
+                const currentDepth = getDepthForScrollTop(normalizedScrollYForDepthCalc); // Now a float
+                updateBackgroundColor(Math.floor(currentDepth)); // Pass floored value for color calculation
+                updateMarkersAndProbe(probeLine, currentDepth); // Pass float value for precise display
+
+                // Create a parallax effect for the particles by moving them opposite to the scroll
+                particlesContainer.style.transform = `translateY(${-scrollY}px)`;
+
+                // --- SPECIAL EFFECTS FOR THE END ---
+
+                // 1. Screenshake at the very center
+                // Check if the user has scrolled to the absolute bottom of the page.
+                const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1; // Use a small tolerance
+                if (isAtBottom && !hasShakenAtBottom) {
+                    hasShakenAtBottom = true; // Set flag to prevent re-triggering
+                    tunnel.classList.add('shake-active');
+                    // Remove the class after animation finishes to clean up
+                    setTimeout(() => {
+                        tunnel.classList.remove('shake-active');
+                    }, 500); // Match animation duration
+                } else if (!isAtBottom && hasShakenAtBottom) {
+                    hasShakenAtBottom = false; // Reset flag when user scrolls up
+                }
+
+                // 2. Fade out the DEPTH PROBE (not the marker) on approach to the center
+                const startFadeDepth = 5500000;
+                const endFadeDepth = 6200000;
+                const opacity = 1 - Math.max(0, Math.min(1, (currentDepth - startFadeDepth) / (endFadeDepth - startFadeDepth)));
+                depthProbe.style.opacity = opacity;
+                document.getElementById('center-of-earth-marker').style.opacity = 1; // Ensure final marker is always visible
+
+                // 3. Fade in the end message
+                const endMessageStartFade = 6100000;
+                const endMessageEndFade = 6200000;
+                const endMessageOpacity = Math.max(0, Math.min(1, (currentDepth - endMessageStartFade) / (endMessageEndFade - endMessageStartFade)));
+                endMessage.style.opacity = endMessageOpacity;
+                
+                requestAnimationFrame(update);
+            }
+
+            function updateBackgroundColor(currentDepth) {
+                let startColor, endColor, localPercent;
+                for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+                    const startStop = COLOR_STOPS[i];
+                    const endStop = COLOR_STOPS[i+1];
+                    if (currentDepth >= startStop.depth && currentDepth <= endStop.depth) {
+                        startColor = hexToRgb(COLOR_STOPS[i].color);
+                        endColor = hexToRgb(COLOR_STOPS[i+1].color);
+                        const range = endStop.depth - startStop.depth;
+                        // Avoid division by zero if stops are at the same depth
+                        localPercent = range > 0 ? (currentDepth - startStop.depth) / range : 1;
+                        break;
+                    }
+                }
+                if(startColor && endColor) {
+                    const r = Math.round(startColor.r + (endColor.r - startColor.r) * localPercent);
+                    const g = Math.round(startColor.g + (endColor.g - startColor.g) * localPercent);
+                    const b = Math.round(startColor.b + (endColor.b - startColor.b) * localPercent);
+                    worldBg.style.backgroundColor = `rgb(${r},${g},${b})`;
+                }
+            }
+
+            function updateMarkersAndProbe(probeLine, currentDepth) {
+                let visuallyActiveMarkerData = null;
+
+                document.querySelectorAll('.marker').forEach(marker => {
+                    const markerTop = marker.offsetTop;
+                    const markerHeight = marker.offsetHeight; // Use actual height
+                    
+                    // --- Logic for probe text snapping ---
+                    // The visual block starts from the top of the emoji and ends at the bottom of the label.
+                    // marker.offsetHeight includes the emoji and the label below it.
+                    const totalVisualHeight = markerHeight;
+
+                    // Asymmetric check: Is the probe line within the visual block of the marker?
+                    if (probeLine >= markerTop && probeLine <= markerTop + totalVisualHeight) {
+                        const markerData = MARKERS.find(m => m.depth == marker.dataset.depth);
+                        if (markerData) {
+                            visuallyActiveMarkerData = markerData;
+                        }
+                    }
+
+                    // --- Logic for scaling up marker ---
+                    // This can remain symmetrical and have a larger activation zone
+                    const markerCenter = markerTop + (100 / 2); // 100 is emoji font-size
+                    const distanceToProbeCenter = Math.abs(probeLine - markerCenter);
+                    if (distanceToProbeCenter < VIEWPORT_HEIGHT / 4) {
+                        marker.classList.add('active');
+                    } else {
+                        marker.classList.remove('active');
+                    }
+                });
+
+                // Now, update the probe's text based on whether an active marker was found
+                if (visuallyActiveMarkerData) {
+                    depthText.textContent = `${visuallyActiveMarkerData.name.toUpperCase()} [${visuallyActiveMarkerData.depth.toLocaleString()} m]`;
+                    depthProbe.classList.add('pulsing');
+                } else {
+                    let depthString;
+                    if (currentDepth < 2) {
+                        depthString = currentDepth.toFixed(2);
+                    } else {
+                        depthString = Math.floor(currentDepth).toLocaleString();
+                    }
+                    depthText.textContent = `${depthString} m`;
+                    depthProbe.classList.remove('pulsing');
+                }
+            }
+
+            function hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+            }
+
+            setup();
+        });
+    </script>
+</body>
+</html>
