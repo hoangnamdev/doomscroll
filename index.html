@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Doomscroll by hnamdev</title>
+        <link rel="stylesheet" type="text/css" href="styles.css">
+    </head>
+    <body>
+        <div id="viewport-container">
+            <div id="world-bg"></div>
+            <div id="particles-container"></div>
+        </div>
+        <main id="tunnel"></main>
+        <div id="depth-probe">
+            <span id="depth-text">0 m</span>
+        </div>
+        <div id="end-message">
+            <h1>Thanks for playing</h1>
+            <p>Doomscroll by <a href="https://github.com/hoangnamdev" target="_blank">@hnamdev</a></p>
+        </div>
+        <div id="rotate-notification">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="100px" height="100px">
+                <path d="M16.49,3.52l-1.41,1.41C16.19,5.73,17,7.27,17,9c0,2.76-2.24,5-5,5s-5-2.24-5-5c0-1.73,0.81-3.27,2.08-4.17L7.66,3.41C6.07,4.64,5,6.68,5,9c0,3.87,3.13,7,7,7s7-3.13,7-7C19,6.76,18.04,4.87,16.49,3.52z M12,1C6.48,1,2,5.48,2,11c0,2.39,0.85,4.58,2.25,6.3l1.45-1.45C4.7,14.65,4,12.93,4,11c0-4.41,3.59-8,8-8s8,3.59,8,8c0,1.93-0.7,3.65-1.85,5.02l1.45,1.45C23.15,15.58,24,13.39,24,11C24,5.48,19.52,1,12,1z"/>
+            </svg>
+            <p>Rotate your device to proceed.</p>
+        </div>
+        <script src="logic.js"></script>
+    </body>
+</html>
